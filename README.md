@@ -1,5 +1,5 @@
 # Simpson codes
-[simpson](https://inano.au.dk/about/research-centers-and-projects/nmr/software/simpson/) is an NMR simulation program taking specfic tcl scripts as input files.
+[simpson](https://inano.au.dk/about/research-centers-and-projects/nmr/software/simpson/) is an NMR simulation program taking specific tcl scripts as input files.
 This repository contains simpson input codes doing various nmr simulations.
 
 A few codes may require specific version of simpson program (such as [simpsonJT](https://github.com/jtrebosc/simpson/tree/MasterJT))

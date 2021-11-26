@@ -10,7 +10,8 @@ FAM-N is a method to enhance magnetization transfer between 3Q and 1Q coherence 
 It was designed by [Henri Colaux et al. in 2014](https://doi.org/10.1021/jp505752c) and [further studied in 2017](https://doi.org/10.1016/j.ssnmr.2017.01.001). 
 Optimization was done using matlab code calling externaly simpson.
 
-This code performs FAM-N optimization from a single simpson input file. The result of optimization is printed on screen.
+This code performs FAM-N optimization from a single simpson input file. The result of optimization is printed on screen. It can use all simpson features 
+in terms of averaging over different parameters like quadrupolar parameters or RF field profiles.
 
 This code requires [simpsonJT](https://github.com/jtrebosc/simpson/tree/MasterJT) version and the [opt](https://inano.au.dk/fileadmin/_migrated/content_uploads/opt-1.0.zip) 
 library located in the same directory as the simpson input file.

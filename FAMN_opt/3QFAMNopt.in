@@ -1,0 +1,195 @@
+# encoding=utf-8
+lappend ::auto_path ./
+package require opt
+
+spinsys { 
+## input: adjust to desired observed nucleus (only one nucleus/channel allowed) and interactions
+   channels 17O 
+   nuclei 17O 
+   quadrupole 1 2 7100e3 0.6  0 0 0 
+} 
+ 
+par { 
+  ## required input parameters
+  proton_frequency 800e6
+  spin_rate        20000 
+
+  ## if averaging_file is active (uncommented) spinsys definition will be overridden
+  ## see simpson articles for syntax and use
+#  averaging_file  averageCqs.txt 1 1
+
+  ## RF: FAMN RF field in Hz
+  variable RF      140000 
+
+  ## nQ: 3, 5, 7 or 9 for 3QMAS, 5QMAS, ...
+  variable nQ  3
+
+  ## n_of_pulses_max: maximum number of pulses to be searched.
+  variable n_of_pulses_max 6
+
+  ## PLweight: weight of pulse length [0: no effect, 1 or more -> pulse length reduced]
+  variable PLweight   2
+
+  ## min_pulse_length: minimum length of a pulse (µs) for minization routine.
+  variable min_pulse_length 0.2
+
+  ## max_pulse_length: maximum length of a pulse (µs) for minization routine.
+  variable max_pulse_length 3.0
+
+  ## pulse_step: pulse length increment for minization routine.
+  variable pulse_step 0.05
+
+  ## other adjustable simulation parameters
+  crystal_file     zcw88
+  gamma_angles     7
+  num_cores    4 
+  ## parameters that should notneed adjustement
+  method           diag 
+  sw               1
+  np               1 
+  verbose          0 
+} 
+ 
+proc pulseq {} { 
+  global par 
+  maxdt 0.5 
+  matrix set start elements $par(nQc)
+  matrix set detect elements $par(SQc)
+# puts "-------------------"
+#  putmatrix [matrix get detect]
+# puts "==================="
+reset 
+  set i 0
+  foreach pulseL $par(FAMNpulseL) { 
+   set phase [expr ($i*180) % 360]
+   pulse  $pulseL $par(RF) $phase
+   incr i
+  } 
+  acq
+} 
+ 
+proc FAMNsim {} {
+  ## calulates the objective function to be minimized
+
+  global par
+
+  ## initialize the pulse list from parameters provided by opt:: module
+  set par(FAMNpulseL) [list ]
+  for {set npul 0} {$npul < $par(n_of_pulses)} {incr npul } {
+    lappend par(FAMNpulseL) [set opt::pul$npul]
+  }
+  ## run the simulation
+  set f [fsimpson]
+
+  ## fullLen is total length of pulse train
+  set fullLen [expr [join $par(FAMNpulseL) +]]
+
+  ## objective function to be minimize accounts for fullLen and magnetization magnitude
+  set res [expr $fullLen**$par(PLweight)/(([findex $f 1 -re]**2) + ([findex $f 1 -im]**2)) ]
+  return $res 
+}
+
+proc round_format {val step {formater "%4.2f"}} {
+  ## Rounds a number to the closest value multiple of step
+  ## val : the value to round
+  ## step : the rounding interval
+  ## optional formater string
+  ## return the formated string of rounded val
+  set ri [ expr int(round($val/$step))]
+  return [format $formater [expr $ri*$step]]
+}
+
+
+proc main {} { 
+  global par 
+
+  # make use of spin_nucNspinsys function found in MasterJT branch at https://github.com/jtrebosc/simpson repository
+  ## spinx2: 2*S with S the spin of nucleus defined in spinsys nucleus number 1
+  set spinx2 [expr int(round([spin_nucNspinsys 1]*2))]
+  if { $spinx2 < $par(nQ)} {
+     puts "Cannot simulate $par(nQ)QMAS FAM-N pulses for a spin ${spinx2}/2"
+     exit
+  }
+  ## calculates the start and detect coherence coordinates in density matrix
+  ## start operator on +3Q
+  set par(nQc) [list [list [expr ($spinx2+1)/2+$par(nQ)/2+1] [expr ($spinx2+1)/2-$par(nQ)/2] ] ]
+  ## detect operator on -1Q that detects CT on +1Q
+  set par(SQc) [list [list [expr ($spinx2+1)/2] [expr ($spinx2+1)/2+1] ] ]
+
+  ## initialize the pulse list to empty list
+  set pulseLinit {}
+
+  ## set the objetive function to be minimized
+  opt::function FAMNsim
+
+  ## 1) optimization algorithm starts with one pulse
+  ## 2) minimize the objective function with respect to pulse lengths found in the pulse list pulseLinit
+  ## 3) add a new pulse with length equal to the last pulse of the last optimization (or 1 if first optimization)
+  ##    the minimum, maximum and step pulse length used by minimize routine can be adjusted 
+  ## 4) optimize the new pulse list (loop to point 2
+  ## 5) loop ends when n_of_pulses_max is reached or if the found 
+
+  ## loop up to n_of_pulses_max
+  for {set par(n_of_pulses) 1} { $par(n_of_pulses) <= $par(n_of_pulses_max)} {incr par(n_of_pulses)} {
+    ## update the pulse list
+    if {[llength $pulseLinit] > 0} {
+      ## see point 3) above
+      lappend pulseLinit [lindex $pulseLinit [expr [llength $pulseLinit]-1]]   
+    } else { # First pulse default to 1 = µs
+      lappend pulseLinit 1
+    }
+
+    ## opt::newpar <parname> <value> <stepsize> ?<min> <max>?
+    opt::newpar pul[expr $par(n_of_pulses)-1] [lindex $pulseLinit [expr $par(n_of_pulses) - 1]]  $par(pulse_step) $par(min_pulse_length) $par(max_pulse_length)  
+
+    ## to follows the published FAMN behavior which arrays the last 2 pulses only uncomment next line
+#    if {$par(n_of_pulses) > 2} {opt::fix pul[expr $par(n_of_pulses)-3]}
+
+    ## run minimization procedure 
+    opt::minimize 
+    ## evaluate the objective function to test if current pulse list is better than previous
+    set cur_opt [FAMNsim]
+    if {[llength $pulseLinit] == 1} { 
+        ## very first minimization: initialize previous_opt variable 
+        set previous_opt cur_opt 
+    } else { 
+        ## compare cur_opt and previous_opt: if not better break loop (don't add more pulses)
+        if {$cur_opt > $previous_opt} {
+            ## break the for {set par(n_of_pulses) 1} loop
+            break  
+        } else { set previous_opt $cur_opt }
+    }
+
+    ## update pulseLinit from last result of optimization
+    for {set npul 0} {$npul < $par(n_of_pulses)} {incr npul } {
+#      puts "about to read  pul$npul"
+      lset pulseLinit $npul [set opt::pul$npul]
+    }
+#  puts $pulseLinit
+  }
+
+  ## n_of_pulses must be decremented at end of loop
+  incr par(n_of_pulses) -1
+  ## FAMNpulseL is truncated to the effective number of pulses in case the loop exits through break
+  set par(FAMNpulseL) [lrange $par(FAMNpulseL) 0 $par(n_of_pulses)-1]
+  for {set npul 0} {$npul < $par(n_of_pulses)} {incr npul } {
+#    lset par(FAMNpulseL) $npul [round_format [set opt::pul$npul] 0.05]
+    lset par(FAMNpulseL) $npul [round_format [lindex $pulseLinit $npul] 0.05]
+  }
+  set f [fsimpson]
+  set Re [round_format  [findex $f 1 -re] 0.01]
+  set Im [round_format  [findex $f 1 -im] 0.01]
+
+  puts "Start from $par(nQ)Q as coherence $par(nQc), detect SQ as coherence $par(SQc)"
+  puts "Input Parameters :"
+  puts "[nucNspinsys 1], 1H freq : [format "%5.1f" [expr $par(proton_frequency)/1e6]] MHz"
+  puts "maximum pulse number : $par(n_of_pulses_max)"
+  puts "Pulse length weight in optimisation : $par(PLweight)"
+  set RFkHz  [format "%5.1f" [expr $par(RF)/1000]]
+  puts "RF= $RFkHz kHz, nurR=$par(spin_rate) Hz"
+  puts "results: "
+  puts "$par(n_of_pulses) pulses(µs)-> $par(FAMNpulseL) "
+  puts "Efficiency (depend on spin and averaging) $Re "
+  set   totalLength [expr [join $par(FAMNpulseL) +]]
+  puts "Total Length [round_format $totalLength 0.01] µs"
+} 

@@ -3,12 +3,12 @@
 This repository contains simpson input codes doing various nmr simulations.
 
 A few codes may require specific version of simpson program (such as [simpsonJT](https://github.com/jtrebosc/simpson/tree/MasterJT))
-or additionnal library ([opt](https://inano.au.dk/fileadmin/_migrated/content_uploads/opt-1.0.zip).
+or additionnal library ([opt](https://inano.au.dk/fileadmin/_migrated/content_uploads/opt-1.0.zip)).
 
 ## FAMN\_opt
 FAM-N is a method to enhance magnetization transfer between 3Q and 1Q coherence levels, used for reconversion in an MQMAS experiment. 
-It was designed by [Henri Colaux et al. in 2014](https://doi.org/10.1021/jp505752c) and [2017](https://doi.org/10.1016/j.ssnmr.2017.01.001). Optimization was done using matlab code 
-calling externaly simpson.
+It was designed by [Henri Colaux et al. in 2014](https://doi.org/10.1021/jp505752c) and [further studied in 2017](https://doi.org/10.1016/j.ssnmr.2017.01.001). 
+Optimization was done using matlab code calling externaly simpson.
 
 This code performs FAM-N optimization from a single simpson input file. The result of optimization is printed on screen.
 

@@ -1,0 +1,6 @@
+quadrupole_1_aniso  weight
+7e6     1
+8e5     1  
+9e6     1
+10e6    1
+11e6    1
